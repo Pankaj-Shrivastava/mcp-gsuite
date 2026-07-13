@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-gsuite"
+version = "0.1.0"
+description = "MCP server for Gmail and Google Docs integration"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0",
+    "google-api-python-client",
+    "google-auth-oauthlib",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-mock", "pytest-asyncio"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

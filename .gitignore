@@ -1,0 +1,23 @@
+# ─── Google Credentials — NEVER commit ────────────────────────────────────────
+credentials.json
+token.json
+service_account.json
+
+# ─── Environment (contains AUTHORIZED_USER_EMAIL) — NEVER commit ──────────────
+.env
+
+# ─── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+
+# ─── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.coverage
