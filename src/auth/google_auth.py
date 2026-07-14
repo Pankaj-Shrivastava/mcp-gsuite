@@ -146,12 +146,21 @@ def _load_oauth2_credentials(scopes: list[str]) -> Credentials:
     credentials_path = _require_env("GOOGLE_CREDENTIALS_PATH")
     token_path = os.getenv("GOOGLE_TOKEN_PATH", "token.json")
 
+    # The identity gate needs the userinfo.email scope to verify who logged in.
+    # Google auto-adds 'openid' when userinfo.email is requested; include it
+    # explicitly so the OAuth library doesn't throw a scope-mismatch error.
+    identity_scopes = [
+        "openid",
+        "https://www.googleapis.com/auth/userinfo.email",
+    ]
+    all_scopes = list(dict.fromkeys(identity_scopes + scopes))  # deduplicate
+
     creds: Optional[Credentials] = None
 
     # Load cached token if it exists
     if os.path.exists(token_path):
         try:
-            creds = Credentials.from_authorized_user_file(token_path, scopes)
+            creds = Credentials.from_authorized_user_file(token_path, all_scopes)
         except Exception as exc:
             raise AuthError(f"Failed to read token file: {exc}") from exc
 
@@ -166,7 +175,7 @@ def _load_oauth2_credentials(scopes: list[str]) -> Credentials:
         else:
             try:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    credentials_path, scopes
+                    credentials_path, all_scopes
                 )
                 creds = flow.run_local_server(port=0)
                 logger.info("OAuth2 flow completed. Token obtained.")
@@ -186,7 +195,10 @@ def _load_oauth2_credentials(scopes: list[str]) -> Credentials:
 
 def _load_service_account_credentials(scopes: list[str]) -> Credentials:
     """Service account credential loader."""
-    credentials_path = _require_env("GOOGLE_CREDENTIALS_PATH")
+    # Use a dedicated env var; fall back to GOOGLE_CREDENTIALS_PATH for compat
+    credentials_path = os.environ.get("GOOGLE_SERVICE_ACCOUNT_PATH", "").strip()
+    if not credentials_path:
+        credentials_path = _require_env("GOOGLE_CREDENTIALS_PATH")
     try:
         return service_account.Credentials.from_service_account_file(
             credentials_path, scopes=scopes

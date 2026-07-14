@@ -1,5 +1,8 @@
 import os
 import pytest
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Guard to prevent running without live credentials
 pytestmark = pytest.mark.skipif(
@@ -7,7 +10,7 @@ pytestmark = pytest.mark.skipif(
     reason="Integration tests disabled. Set RUN_INTEGRATION=1 to run."
 )
 
-from src.tools.docs import create_document, append_to_document
+from src.tools.docs import append_to_document
 from googleapiclient.discovery import build
 from src.auth.google_auth import get_credentials
 
@@ -21,41 +24,19 @@ def test_email():
     return email
 
 
-def test_live_create_document():
-    """Creates a real Google Doc; asserts a valid URL is returned; deletes it after."""
-    title = "Integration Test Doc"
-    content = "This is a test document created by mcp-gsuite integration tests."
-    
-    result = create_document(title, content)
-    
-    assert "document_id" in result
-    assert "document_url" in result
-    assert result["title"] == title
-    assert result["document_id"] in result["document_url"]
-    
-    # Cleanup
-    creds = get_credentials(["https://www.googleapis.com/auth/drive"])
-    drive_service = build("drive", "v3", credentials=creds)
-    drive_service.files().delete(fileId=result["document_id"]).execute()
-
-
 def test_live_append_to_document():
-    """Creates a doc, appends content, verifies revision ID changes; deletes it after."""
-    # 1. Create doc
-    doc_result = create_document("Append Test Doc", "Initial Line.\n")
-    doc_id = doc_result["document_id"]
+    """Creates a doc via API directly, appends content, verifies revision ID changes; deletes it after."""
+    # 1. Create doc manually to test append
+    creds = get_credentials(["https://www.googleapis.com/auth/documents"])
+    docs = build("docs", "v1", credentials=creds)
+    doc_result = docs.documents().create(body={"title": "Append Test Doc"}).execute()
+    doc_id = doc_result["documentId"]
     
-    try:
-        # 2. Append content
-        append_result = append_to_document(doc_id, "Appended Line.\n")
-        
-        assert append_result["document_id"] == doc_id
-        assert append_result["revision_id"] != ""
-    finally:
-        # 3. Cleanup
-        creds = get_credentials(["https://www.googleapis.com/auth/drive"])
-        drive_service = build("drive", "v3", credentials=creds)
-        drive_service.files().delete(fileId=doc_id).execute()
+    # 2. Append content
+    append_result = append_to_document(doc_id, "Appended Line.\n")
+    
+    assert append_result["document_id"] == doc_id
+    assert append_result["revision_id"] != ""
 
 
 

@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any, Dict
 
 from googleapiclient.discovery import build
@@ -23,9 +24,10 @@ MAX_APPEND_BYTES = 1 * 1024 * 1024  # 1 MB
 def _handle_http_error(error: HttpError, action_desc: str) -> None:
     """Map Google API HttpErrors to specific domain exceptions."""
     status = error.resp.status
+    error_text = str(error).lower()
     if status in (401, 403):
         # Could be token expiry, missing scope, or storage limit
-        if "quota" in str(error).lower() or "limit" in str(error).lower():
+        if "quota" in error_text or "limit" in error_text or "storage" in error_text:
             raise QuotaError(f"Google API quota or limit exceeded during {action_desc}.")
         raise PermissionError(f"Permission denied during {action_desc}. Status {status}.")
     elif status == 429:
@@ -41,33 +43,51 @@ def _handle_http_error(error: HttpError, action_desc: str) -> None:
 def create_document(title: str, content: str) -> Dict[str, str]:
     """
     Creates a new Google Doc with the given title and populates it with content.
+
+    The document is created inside the shared folder specified by
+    GOOGLE_SHARED_FOLDER_ID so that the service account (which has 0 bytes of
+    its own Drive quota) can write to the user's Drive.
     """
     if not isinstance(title, str) or not title.strip():
         raise InvalidInputError("title must be a non-empty string.")
     if not isinstance(content, str) or not content.strip():
         raise InvalidInputError("content must be a non-empty string.")
 
-    creds = get_credentials(DOCS_SCOPES)
-    service = build("docs", "v1", credentials=creds)
+    shared_folder_id = os.environ.get("GOOGLE_SHARED_FOLDER_ID", "").strip()
+    if not shared_folder_id:
+        raise MCPGSuiteError(
+            "GOOGLE_SHARED_FOLDER_ID is not set. "
+            "Create a folder in your Google Drive, share it with the service "
+            "account email as Editor, and set this env var to the folder ID."
+        )
 
-    # 1. Create empty document
+    creds = get_credentials(DOCS_SCOPES)
+    drive_service = build("drive", "v3", credentials=creds)
+    docs_service = build("docs", "v1", credentials=creds)
+
+    # 1. Create an empty Google Doc inside the shared folder via Drive API
+    file_metadata = {
+        "name": title,
+        "mimeType": "application/vnd.google-apps.document",
+        "parents": [shared_folder_id],
+    }
     try:
-        doc = service.documents().create(body={"title": title}).execute()
-        document_id = doc["documentId"]
+        file_result = drive_service.files().create(
+            body=file_metadata, fields="id", supportsAllDrives=True
+        ).execute()
+        document_id = file_result["id"]
     except HttpError as e:
         _handle_http_error(e, "document creation")
     except Exception as e:
         raise MCPGSuiteError(f"Unexpected error during document creation: {e}")
 
-    # 2. Insert content
+    # 2. Insert content via Docs API
     requests = [{"insertText": {"location": {"index": 1}, "text": content}}]
     try:
-        service.documents().batchUpdate(
+        docs_service.documents().batchUpdate(
             documentId=document_id, body={"requests": requests}
         ).execute()
     except HttpError as e:
-        # Edge case: Create succeeded but append failed. The doc exists but is empty.
-        # We must raise to inform the agent the content write failed.
         raise MCPGSuiteError(
             f"Document created (ID: {document_id}) but content insertion failed: {e}"
         )
