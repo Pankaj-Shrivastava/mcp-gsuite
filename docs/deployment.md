@@ -54,7 +54,7 @@ Scroll down to the **Environment Variables** section and add the following keys.
 | `MCP_HOST` | `0.0.0.0` | Allows Render's network to route traffic to your app. |
 | `MCP_PORT` | `10000` | The internal port the server will bind to. |
 | `PORT` | `10000` | Tells Render to route traffic to port 10000. |
-| `GOOGLE_CREDENTIALS_PATH` | `./service_account.json` | Path to the credentials file we will create below. |
+| `GOOGLE_SERVICE_ACCOUNT_PATH` | `./service_account.json` | Path to the credentials file we will create below. |
 
 ### Step 2.4: Uploading the Service Account Secret
 Because we git-ignored our credentials (for good reason!), we have to provide them to Render securely.
@@ -80,7 +80,22 @@ Because `mcp-gsuite` uses the `sse` transport, your MCP connection URL will be t
 **Your MCP URL:** 
 `https://mcp-gsuite-xyz.onrender.com/sse`
 
-You can provide this URL to any remote MCP-compatible agent to allow them to securely connect to your Google Docs and Gmail integration!
+You can provide this URL to any remote MCP-compatible agent to allow them to securely connect to your Google Docs integration!
+
+---
+
+## 4. How to Use (Appending to Documents)
+
+Because Service Accounts on personal Google accounts do not have their own Google Drive storage quota, they cannot create new documents. This server is specifically designed to **append to existing documents**.
+
+To use the tools:
+1. **Create a Google Doc** using your personal Google account.
+2. Click **Share** (top right corner).
+3. Add your Service Account email (e.g., `mcp-server-bot@your-project.iam.gserviceaccount.com`) as an **Editor**.
+4. Copy the **Document ID** from your browser's URL bar (the long string between `/d/` and `/edit`).
+5. Ask your AI agent to append text to that specific Document ID.
+
+*(You do not need to configure the Document ID in your Render environment variables — it is passed dynamically by the AI agent when it calls the tool).*
 
 ---
 
