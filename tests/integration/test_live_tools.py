@@ -8,7 +8,6 @@ pytestmark = pytest.mark.skipif(
 )
 
 from src.tools.docs import create_document, append_to_document
-from src.tools.gmail import create_email_draft, send_email
 from googleapiclient.discovery import build
 from src.auth.google_auth import get_credentials
 
@@ -59,28 +58,4 @@ def test_live_append_to_document():
         drive_service.files().delete(fileId=doc_id).execute()
 
 
-def test_live_create_email_draft(test_email):
-    """Creates a real Gmail draft; verifies draft_id; deletes draft after."""
-    subject = "Integration Test Draft"
-    body = "This is a draft from mcp-gsuite."
-    
-    result = create_email_draft(to=test_email, subject=subject, body=body)
-    
-    assert "draft_id" in result
-    assert "message_id" in result
-    
-    # Cleanup
-    creds = get_credentials(["https://www.googleapis.com/auth/gmail.compose"])
-    gmail_service = build("gmail", "v1", credentials=creds)
-    gmail_service.users().drafts().delete(userId="me", id=result["draft_id"]).execute()
 
-
-def test_live_send_email(test_email):
-    """Sends a real email to the test account; verifies message_id returned."""
-    subject = "Integration Test Send"
-    body = "This is a live sent email from mcp-gsuite."
-    
-    result = send_email(to=test_email, subject=subject, body=body)
-    
-    assert "message_id" in result
-    assert "thread_id" in result

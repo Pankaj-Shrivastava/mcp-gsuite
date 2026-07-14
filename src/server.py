@@ -8,8 +8,6 @@ from mcp.server.fastmcp import FastMCP
 
 from src.tools.docs import create_document as _create_document
 from src.tools.docs import append_to_document as _append_to_document
-from src.tools.gmail import create_email_draft as _create_email_draft
-from src.tools.gmail import send_email as _send_email
 from src.exceptions import MCPGSuiteError
 
 load_dotenv()
@@ -56,37 +54,7 @@ def append_to_document(document_id: str, content: str) -> dict:
     except MCPGSuiteError as e:
         return {"error": str(e)}
 
-@app.tool()
-def create_email_draft(to: str, subject: str, body: str, cc: Optional[str] = None) -> dict:
-    """
-    Creates an email draft in Gmail.
-    
-    Args:
-        to: Comma-separated list of recipient emails
-        subject: Email subject
-        body: Email body content
-        cc: Optional comma-separated CC emails
-    """
-    try:
-        return _create_email_draft(to, subject, body, cc)
-    except MCPGSuiteError as e:
-        return {"error": str(e)}
 
-@app.tool()
-def send_email(to: str, subject: str, body: str, cc: Optional[str] = None) -> dict:
-    """
-    Immediately sends an email via Gmail.
-    
-    Args:
-        to: Comma-separated list of recipient emails
-        subject: Email subject
-        body: Email body content
-        cc: Optional comma-separated CC emails
-    """
-    try:
-        return _send_email(to, subject, body, cc)
-    except MCPGSuiteError as e:
-        return {"error": str(e)}
 
 def main():
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
