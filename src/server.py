@@ -22,8 +22,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+host = os.getenv("MCP_HOST", "0.0.0.0")
+port = int(os.getenv("MCP_PORT", "8000"))
+
 # Instantiate the MCP server
-app = FastMCP("mcp-gsuite")
+app = FastMCP("mcp-gsuite", host=host, port=port, dependencies=["google-api-python-client", "google-auth-httplib2", "google-auth-oauthlib"])
 
 @app.tool()
 def create_document(title: str, content: str) -> dict:
@@ -92,11 +95,7 @@ def main():
         logger.info("Starting mcp-gsuite via stdio transport")
         app.run(transport="stdio")
     elif transport == "sse":
-        host = os.getenv("MCP_HOST", "127.0.0.1")
-        port = int(os.getenv("MCP_PORT", "8000"))
-        logger.info(f"Starting mcp-gsuite via sse transport on {host}:{port}")
-        app.settings.host = host
-        app.settings.port = port
+        logger.info(f"Starting mcp-gsuite via sse transport on {app.settings.host}:{app.settings.port}")
         app.run(transport="sse")
     else:
         logger.error(f"Unknown transport: {transport}")
