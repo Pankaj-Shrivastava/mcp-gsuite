@@ -49,10 +49,7 @@ def main():
         app.run(transport="stdio")
     elif transport == "sse":
         logger.info(f"Starting mcp-gsuite via sse transport on {app.settings.host}:{app.settings.port}")
-        # Render sets RENDER_EXTERNAL_URL automatically. 
-        # If not on render, it will use None and fallback to relative paths.
-        external_url = os.getenv("RENDER_EXTERNAL_URL")
-        app.run(transport="sse", mount_path=external_url)
+        app.run(transport="sse")
     else:
         logger.error(f"Unknown transport: {transport}")
         sys.exit(1)
