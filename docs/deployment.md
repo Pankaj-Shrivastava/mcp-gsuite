@@ -1,28 +1,30 @@
-# Deploying mcp-gsuite to Railway
+# Deploying mcp-gsuite to the Cloud
 
-This guide explains how to deploy your `mcp-gsuite` MCP server to **Railway.app** so that remote AI agents can access it over the internet.
+This guide covers deploying your `mcp-gsuite` MCP server to the internet using two platforms: **Railway** (recommended) and **Render** (free alternative).
 
-## Why Railway?
+## Platform Comparison
 
-Railway keeps your service **always running** — there are no cold starts or spin-downs like free-tier alternatives. This is critical for MCP servers because they use SSE (Server-Sent Events), which requires long-lived HTTP connections that would be killed by serverless platforms or sleeping free-tier containers.
-
-| Feature | Railway |
-|---|---|
-| Cold starts | ❌ None — always on |
-| SSE support | ✅ Full support |
-| Python support | ✅ Native (auto-detected) |
-| Deploys from | GitHub |
-| Pricing | $5/month (includes $5 usage credit) |
-| Free trial | 30 days / $5 credit (no card required) |
+| Feature | Railway | Render (Free) |
+|---|---|---|
+| Cold starts | ❌ None — always on | ⚠️ 30-60s after inactivity |
+| SSE support | ✅ Full support | ✅ Full support |
+| Python support | ✅ Native | ✅ Native |
+| Deploys from | GitHub | GitHub |
+| Pricing | $5/month (includes $5 credit) | Free (750 hrs/month) |
+| Free trial | 30 days / $5 credit | Always free |
+| Best for | Production, reliable connections | Testing, occasional use |
 
 > **[!IMPORTANT]**
 > When deploying to the cloud, you **cannot** use `oauth2` authentication because it requires opening a local web browser to log in. You must use `service_account` mode.
+
+> **[!WARNING]**
+> **Render free tier cold starts:** After ~15 minutes of inactivity, Render spins down your service. The next connection takes 30-60 seconds to wake up, which often exceeds MCP client timeouts (causing "context deadline exceeded" errors). Use [UptimeRobot](https://uptimerobot.com/) to ping the URL every 5 minutes to keep it warm.
 
 ---
 
 ## 1. Prerequisites (Service Account)
 
-Before deploying, you must create a Service Account in Google Cloud:
+Before deploying on either platform, create a Google Cloud Service Account:
 
 1. Go to your [Google Cloud Console](https://console.cloud.google.com/).
 2. Navigate to **IAM & Admin** > **Service Accounts**.
@@ -36,78 +38,70 @@ Before deploying, you must create a Service Account in Google Cloud:
 
 ## 2. Push Your Code to GitHub
 
-Railway deploys from a GitHub repository. Make sure your latest code is pushed:
+Both platforms deploy from a GitHub repository. Make sure your latest code is pushed:
 
 ```bash
 git add .
-git commit -m "Prepare for Railway deployment"
+git commit -m "Prepare for cloud deployment"
 git push origin main
 ```
 
 > **[!IMPORTANT]**
-> Your `.gitignore` excludes `service_account.json`, `.env`, `credentials.json`, and `token.json`. This is correct — we will provide these secrets through Railway's dashboard.
+> Your `.gitignore` correctly excludes `service_account.json`, `.env`, `credentials.json`, and `token.json`. Never commit these — provide them as secrets through the platform dashboard.
 
 ---
 
-## 3. Deploy to Railway
+## Option A: Deploy to Railway (Recommended)
 
-### Step 3.1: Create an Account
+Railway keeps your service **always running** with no cold starts, making it the most reliable choice for MCP servers.
+
+### Step A1: Create an Account
 1. Go to [railway.app](https://railway.app/) and sign up with your GitHub account.
-2. You'll get a **30-day free trial with $5 in credits** — more than enough to test.
+2. You'll get a **30-day free trial with $5 in credits** — no credit card required.
 
-### Step 3.2: Create a New Project
+### Step A2: Create a New Project
 1. From the Railway dashboard, click **"New Project"**.
 2. Select **"Deploy from GitHub repo"**.
 3. Authorize Railway to access your GitHub and select the `mcp-gsuite` repository.
-4. Railway will auto-detect it as a Python project.
+4. Railway auto-detects it as a Python project and uses the `Procfile` to start the server.
 
-### Step 3.3: Configure Environment Variables
-Before the first deploy completes, go to your service's **Variables** tab and add:
+### Step A3: Configure Environment Variables
+Go to your service's **Variables** tab and add:
 
 | Key | Value | Description |
 |---|---|---|
-| `AUTH_MODE` | `service_account` | Tells the server to use the service account (not OAuth2). |
-| `MCP_TRANSPORT` | `sse` | Exposes the server over HTTP with Server-Sent Events. |
-| `MCP_HOST` | `0.0.0.0` | Allows Railway's network to route traffic to your app. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | *(see Step 3.4)* | The service account credentials. |
+| `AUTH_MODE` | `service_account` | Use service account credentials. |
+| `MCP_TRANSPORT` | `sse` | Expose the server via SSE over HTTP. |
+| `MCP_HOST` | `0.0.0.0` | Allow Railway's network to route traffic. |
+| `GOOGLE_SERVICE_ACCOUNT_PATH` | `./service_account.json` | Path to credentials file. |
 
 > **[!NOTE]**
-> You do **not** need to set `PORT` or `MCP_PORT`. Railway automatically injects a `PORT` env var, and the server picks it up automatically.
+> You do **not** need to set `PORT` or `MCP_PORT`. Railway automatically injects `PORT`, and the server picks it up automatically.
 
-### Step 3.4: Providing the Service Account Credentials
+### Step A4: Upload the Service Account Credentials
 
-Since `service_account.json` is git-ignored (correctly), you need to get the credentials to Railway. There are two approaches:
+Since `service_account.json` is git-ignored, provide it via Railway's **Secret Files**:
 
-**Option A: Inline JSON in an environment variable (Recommended)**
+1. In your service configuration, go to the **Settings** tab.
+2. Scroll to **"Secret Files"** and click **"Add Secret File"**.
+3. **Filename:** `service_account.json`
+4. **Contents:** Paste the entire JSON from your downloaded service account key.
 
-1. Open your local `service_account.json` file.
-2. Copy the entire JSON content.
-3. In Railway's Variables tab, create a new variable:
-   - **Key:** `GOOGLE_SERVICE_ACCOUNT_JSON`
-   - **Value:** Paste the entire JSON content.
-4. The server will need a small code update to read from this env var (see Section 5).
-
-**Option B: Commit a dummy path and use a volume**
-
-Railway supports persistent volumes, but for a simple credentials file, Option A is simpler and more secure.
-
-### Step 3.5: Generate a Public Domain
-By default, Railway services don't have a public URL. To expose your MCP server:
-
+### Step A5: Generate a Public Domain
 1. Go to your service's **Settings** tab.
 2. Under **Networking**, click **"Generate Domain"**.
-3. Railway will assign a public URL like `https://mcp-gsuite-production-xxxx.up.railway.app`.
+3. Railway assigns a URL like `https://mcp-gsuite-production-xxxx.up.railway.app`.
 
-Your MCP endpoint will be:
+**Your MCP endpoint:**
 ```
 https://mcp-gsuite-production-xxxx.up.railway.app/sse
 ```
 
-### Step 3.6: Deploy
-Railway auto-deploys on every push to `main`. You can also trigger a manual deploy from the dashboard. Watch the build logs to confirm:
+### Step A6: Deploy
+Railway auto-deploys on every push to `main`. Confirm the build by watching the logs:
 
 ```
-Installing dependencies...
+Installing dependencies from requirements.txt...
 Starting web process: python -c "from src.server import main; main()"
 INFO: Started server process
 INFO: Uvicorn running on http://0.0.0.0:<PORT>
@@ -115,35 +109,88 @@ INFO: Uvicorn running on http://0.0.0.0:<PORT>
 
 ---
 
-## 4. Connecting to Your Deployed Server
+## Option B: Deploy to Render (Free)
 
-Once deployed, provide the SSE URL to any MCP-compatible client:
+Render's free tier is a good option for testing, but be aware of cold starts (see the warning at the top).
 
-**Your MCP URL:**
+### Step B1: Connect GitHub
+1. Go to [Render.com](https://render.com/) and sign up using your GitHub account.
+2. Click **New** > **Web Service**.
+3. Select **"Build and deploy from a Git repository"**.
+4. Connect the `mcp-gsuite` repository.
+
+### Step B2: Configure the Service
+
+| Setting | Value |
+|---|---|
+| **Name** | `mcp-gsuite` |
+| **Region** | Closest to you |
+| **Branch** | `main` |
+| **Runtime** | `Python 3` |
+| **Build Command** | `pip install -e .` |
+| **Start Command** | `python -c "from src.server import main; main()"` |
+| **Instance Type** | `Free` |
+
+### Step B3: Configure Environment Variables
+
+| Key | Value | Description |
+|---|---|---|
+| `AUTH_MODE` | `service_account` | Use service account credentials. |
+| `MCP_TRANSPORT` | `sse` | Expose the server via SSE over HTTP. |
+| `MCP_HOST` | `0.0.0.0` | Allow Render's network to route traffic. |
+| `MCP_PORT` | `10000` | Port Render expects your app to bind to. |
+| `PORT` | `10000` | Tells Render to route external traffic here. |
+| `GOOGLE_SERVICE_ACCOUNT_PATH` | `./service_account.json` | Path to credentials file. |
+
+### Step B4: Upload the Service Account Credentials
+
+1. In your Render service configuration, scroll to the **Secret Files** section.
+2. Click **Add Secret File**.
+3. **Filename:** `service_account.json`
+4. **Contents:** Paste the entire JSON from your downloaded service account key.
+
+### Step B5: Deploy
+Click **Create Web Service**. Render will build and start the server. Once done, the public URL appears in the top-left of your dashboard (e.g., `https://mcp-gsuite-xyz.onrender.com`).
+
+**Your MCP endpoint:**
 ```
-https://mcp-gsuite-production-xxxx.up.railway.app/sse
+https://mcp-gsuite-xyz.onrender.com/sse
 ```
 
-### Example: Cursor IDE MCP Config
+### Step B6: Keep It Warm (Avoid Cold Starts)
+To prevent the 30-60s cold start timeout that breaks MCP connections:
+1. Sign up for [UptimeRobot](https://uptimerobot.com/) (free).
+2. Add an HTTP monitor for `https://mcp-gsuite-xyz.onrender.com/`.
+3. Set interval to **every 5 minutes**.
+
+This keeps the service warm so MCP clients can connect instantly.
+
+---
+
+## 3. Connecting to Your Deployed Server
+
+Once deployed on either platform, add it to your MCP client:
+
+### Cursor IDE `mcp.json` Config
 ```json
 {
   "mcpServers": {
     "gsuite-mcp": {
-      "url": "https://mcp-gsuite-production-xxxx.up.railway.app/sse"
+      "url": "https://<your-deployment-url>/sse"
     }
   }
 }
 ```
 
-### Example: Test with the MCP test client
+### Test from Terminal
+Update the URL in `test_client.py` and run:
 ```bash
 python test_client.py
 ```
-*(Update the URL in `test_client.py` to your Railway URL first.)*
 
 ---
 
-## 5. How to Use (Appending to Documents)
+## 4. How to Use (Appending to Documents)
 
 Because Service Accounts on personal Google accounts do not have their own Google Drive storage quota, they cannot create new documents. This server is specifically designed to **append to existing documents**.
 
@@ -154,11 +201,9 @@ To use the tools:
 4. Copy the **Document ID** from your browser's URL bar (the long string between `/d/` and `/edit`).
 5. Ask your AI agent to append text to that specific Document ID.
 
-*(You do not need to configure the Document ID in your Railway environment variables — it is passed dynamically by the AI agent when it calls the tool).*
-
 ---
 
-## 6. Security Considerations for Public Deployment
+## 5. Security Considerations for Public Deployment
 
 By deploying this publicly, your SSE endpoint is available to the open internet.
 Because `mcp-gsuite` implements a robust **stateless identity gate**, the server natively refuses unauthorized requests.
@@ -169,10 +214,12 @@ However, it is highly recommended to eventually place the endpoint behind an API
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---|---|
-| Build fails with `ModuleNotFoundError` | Ensure `requirements.txt` includes all deps (`uvicorn[standard]`, `starlette`, etc.) |
-| Deploy succeeds but no public URL | Go to Settings → Networking → Generate Domain |
-| `PORT` errors | Don't hardcode a port. The server reads Railway's `PORT` env var automatically. |
-| Google API returns 403 | Ensure `AUTH_MODE=service_account` is set and the service account JSON is correct. |
-| Tool returns permission error | Share the target Google Doc with the service account email as Editor. |
+| Problem | Platform | Fix |
+|---|---|---|
+| `context deadline exceeded` in MCP client | Render | Cold start — wait 60s and retry, or set up UptimeRobot. |
+| Build fails with `ModuleNotFoundError` | Both | Ensure `requirements.txt` includes `uvicorn[standard]` and `starlette`. |
+| Deploy succeeds but no public URL | Railway | Go to Settings → Networking → Generate Domain. |
+| `PORT` binding errors | Railway | Don't set `MCP_PORT`. Railway's `PORT` env var is picked up automatically. |
+| Google API returns 403 | Both | Ensure `AUTH_MODE=service_account` is set and the service account JSON is correct. |
+| Tool returns permission error | Both | Share the target Google Doc with the service account email as Editor. |
+| Tools list is empty in MCP client | Render | Server may still be cold-starting. Open the URL in a browser first, then retry. |
