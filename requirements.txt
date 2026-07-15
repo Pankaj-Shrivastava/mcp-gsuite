@@ -2,6 +2,8 @@ mcp>=1.0
 google-api-python-client
 google-auth-oauthlib
 python-dotenv
+uvicorn[standard]
+starlette
 pytest
 pytest-mock
 pytest-asyncio
