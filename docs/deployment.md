@@ -127,7 +127,7 @@ Render's free tier is a good option for testing, but be aware of cold starts (se
 | **Region** | Closest to you |
 | **Branch** | `main` |
 | **Runtime** | `Python 3` |
-| **Build Command** | `pip install -e .` |
+| **Build Command** | `pip install -r requirements.txt && pip install -e .` |
 | **Start Command** | `python -c "from src.server import main; main()"` |
 | **Instance Type** | `Free` |
 
